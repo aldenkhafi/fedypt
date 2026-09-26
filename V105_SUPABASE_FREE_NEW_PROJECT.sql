@@ -5,7 +5,7 @@
 --
 -- This schema is based on the tables/columns actually used by the V105
 -- connected application: user_access, pt_directory, pt_clients,
--- pt_packages, pt_schedules, pt_conducts and pt_extension_requests.
+-- pt_packages, pt_schedules, pt_conducts.
 
 create extension if not exists pgcrypto;
 
@@ -145,25 +145,6 @@ create index if not exists pt_conducts_client_idx on public.pt_conducts(client_i
 create index if not exists pt_conducts_pt_idx on public.pt_conducts(pt_user_id);
 create index if not exists pt_conducts_datetime_idx on public.pt_conducts(conducted_at desc);
 
--- ------------------------------------------------------------
--- PACKAGE EXTENSION APPROVAL
--- ------------------------------------------------------------
-create table if not exists public.pt_extension_requests (
-  id uuid primary key default gen_random_uuid(),
-  package_id uuid not null references public.pt_packages(id) on delete cascade,
-  requested_by uuid references auth.users(id) on delete set null,
-  requested_expiry date,
-  reason text,
-  status text not null default 'PENDING_APPROVAL',
-  approved_by uuid references auth.users(id) on delete set null,
-  approved_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create index if not exists pt_extension_requests_package_idx on public.pt_extension_requests(package_id);
-create index if not exists pt_extension_requests_status_idx on public.pt_extension_requests(status);
-create index if not exists pt_extension_requests_created_idx on public.pt_extension_requests(created_at desc);
 
 -- ------------------------------------------------------------
 -- COMMON updated_at TRIGGER
@@ -200,10 +181,6 @@ for each row execute function public.fj_set_updated_at();
 
 drop trigger if exists trg_pt_conducts_updated_at on public.pt_conducts;
 create trigger trg_pt_conducts_updated_at before update on public.pt_conducts
-for each row execute function public.fj_set_updated_at();
-
-drop trigger if exists trg_pt_extension_requests_updated_at on public.pt_extension_requests;
-create trigger trg_pt_extension_requests_updated_at before update on public.pt_extension_requests
 for each row execute function public.fj_set_updated_at();
 
 -- ------------------------------------------------------------
@@ -284,7 +261,6 @@ alter table public.pt_clients enable row level security;
 alter table public.pt_packages enable row level security;
 alter table public.pt_schedules enable row level security;
 alter table public.pt_conducts enable row level security;
-alter table public.pt_extension_requests enable row level security;
 
 -- Remove/recreate only the policies owned by this setup script.
 do $$
@@ -293,7 +269,7 @@ begin
   for r in select schemaname, tablename, policyname
            from pg_policies
            where schemaname='public'
-             and tablename in ('user_access','pt_directory','pt_clients','pt_packages','pt_schedules','pt_conducts','pt_extension_requests')
+             and tablename in ('user_access','pt_directory','pt_clients','pt_packages','pt_schedules','pt_conducts')
   loop
     execute format('drop policy if exists %I on %I.%I', r.policyname, r.schemaname, r.tablename);
   end loop;
@@ -452,27 +428,6 @@ for delete to authenticated
 using (public.fj_is_master_admin() or pt_user_id = auth.uid());
 
 -- Extension requests: Admin manages approvals; PT can create/read their package requests.
-create policy pt_extension_requests_select on public.pt_extension_requests
-for select to authenticated
-using (
-  public.fj_is_master_admin() or
-  requested_by = auth.uid() or
-  exists (
-    select 1 from public.pt_packages p
-    join public.pt_clients c on c.id = p.client_id
-    where p.id = pt_extension_requests.package_id and c.pt_user_id = auth.uid()
-  )
-);
-
-create policy pt_extension_requests_insert on public.pt_extension_requests
-for insert to authenticated
-with check (public.fj_is_master_admin() or requested_by = auth.uid());
-
-create policy pt_extension_requests_update on public.pt_extension_requests
-for update to authenticated
-using (public.fj_is_master_admin() or requested_by = auth.uid())
-with check (public.fj_is_master_admin() or requested_by = auth.uid());
-
 -- ------------------------------------------------------------
 -- Grants required by Supabase API. RLS remains the security boundary.
 -- ------------------------------------------------------------
@@ -487,5 +442,5 @@ alter default privileges in schema public revoke execute on functions from publi
 -- Verification summary. The SQL editor will return one row after setup.
 select 'V105 NEW PROJECT DATABASE READY' as setup_status,
        (select count(*) from pg_tables where schemaname='public' and tablename in (
-         'user_access','pt_directory','pt_clients','pt_packages','pt_schedules','pt_conducts','pt_extension_requests'
+         'user_access','pt_directory','pt_clients','pt_packages','pt_schedules','pt_conducts'
        )) as required_table_count;
