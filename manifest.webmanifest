@@ -1,0 +1,15 @@
+{
+  "name": "FITNESS JOURNEY",
+  "short_name": "FITNESS JOURNEY",
+  "description": "FITNESS JOURNEY training and fitness management",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#102a43",
+  "background_color": "#f4f7fa",
+  "icons": [
+    {"src":"icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
